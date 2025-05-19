@@ -1,0 +1,17 @@
+{
+    "name": "VirtualPhenix.Nintendo64.PokemonSnap",
+    "rootNamespace": "VirtualPhenix.Nintendo64.PokemonSnap",
+    "references": [
+        "GUID:309680dea9fbcc74ab1ba1f5ed452e91",
+        "GUID:019bbf18547ef0442bdaedd944e020f6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
