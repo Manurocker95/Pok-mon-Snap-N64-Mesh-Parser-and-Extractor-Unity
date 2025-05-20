@@ -6,7 +6,7 @@ using System.Linq;
 using VirtualPhenix.Nintendo64.BanjoKazooie;
 using System.IO;
 using System;
-using System.Security.AccessControl;
+using VirtualPhenix.PokemonSnap64;
 
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap { 
@@ -41,42 +41,218 @@ public class SceneCreator : EditorWindow
 
     public static void SpawnObjectsFromParsedLevelRooms(Level level)
     {
-       GameObject go = new GameObject("[Level "+ level.Name+"]");
+        GameObject go = new GameObject("[Level "+ level.Name+"]");
+        var pkLevel = go.AddComponent<PKSnap_Level>();
 
-       var skyboxRoom = level.Skybox;
-       SpawnFromRoomData(skyboxRoom, "Skybox", go.transform);
+        var skyboxRoom = SpawnFromRoomData(level.Skybox, "Skybox", go.transform);
+        PKSnap_Skybox skybox = skyboxRoom.gameObject.AddComponent<PKSnap_Skybox>();
+        pkLevel.SetSkybox(skybox);
 
         int idx = 0;
         foreach (var rooms in level.Rooms)
         {
-            SpawnFromRoomData(rooms, "[Room "+ idx + "]", go.transform);
+            var room = SpawnFromRoomData(rooms, "[Room "+ idx + "]", go.transform);
+            pkLevel.AddRoom(room);
             idx++;
         }
+        
+        foreach (var objs in level.ObjectInfo)
+        {
+            PKSnap_Actor spawnedActor = SpawnActorFromLevelData(objs, "[Actor " + objs.ID + "]", go.transform, objs.ID);
+            SpawnActorPerSpawnObject(spawnedActor, pkLevel);
+        }
+
+        go.transform.localScale = new Vector3(-0.01f, 0.01f, 0.01f);
     }
-    public static void SpawnFromRoomData(Room data, string customName, Transform parent)
+
+    public static void SpawnActorPerSpawnObject(PKSnap_Actor actor, PKSnap_Level pkLevel)
     {
+            bool found = false;
+        foreach (var room in pkLevel.Rooms)
+        {
+            if (room.HasActor(actor.ID, out List<PKSnap_ObjectData> spawnedObjects))
+            {
+                foreach (var obj in spawnedObjects)
+                {
+                    if (!found)
+                        found = true;
+
+                    PKSnap_Actor ac = Instantiate(actor, obj.transform);
+                    ac.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                }
+            }
+        }
+
+        if (found)
+        {
+            DestroyImmediate(actor.gameObject);
+        }           
+    }
+    public static Sprite ToUnitySprite(Texture2D texture)
+    {
+        return Sprite.Create(
+            texture,
+            new Rect(0, 0, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f), // pivot en el centro
+            100.0f                   // pixelsPerUnit (ajústalo según necesidad)
+        );
+    }
+
+    public static PKSnap_Actor SpawnActorFromLevelData(ObjectDef data, string customName, Transform parent, long id)
+    {
+        Debug.Log("Parsing Actor with id: " + data.ID);
+        GameObject go = new GameObject(customName);
+        go.transform.parent = parent;
+
+        var textures = BuildTexturesFromTextureCache(data.SharedOutput.TextureCache, customName);
+    
+        if (data is StaticDef)
+        {
+            StaticDef staticData = (StaticDef)data;
+
+            var materials = BuildMaterialsFromData(staticData.Node.Materials, textures);
+            var mesh = BuildMeshFromRSPVertices(staticData.SharedOutput.Vertices, staticData.SharedOutput.Indices);
+            if (mesh != null)
+            {
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.materials = materials.ToArray();
+                var mf = go.AddComponent<MeshFilter>();
+                mf.sharedMesh = mesh;
+            }
+        }
+        else
+        {
+
+        }
+
+
+        var actor = go.AddComponent<PKSnap_Actor>();
+        actor.InitActor(id, textures);
+        return actor;
+    }
+
+    public static List<Texture2D> BuildTexturesFromTextureCache(RDP.TextureCache textureCache, string customName)
+    {
+        var list = new List<Texture2D>();
+
+        Debug.Log("Texture Cache Count: " + textureCache.textures.Count);
+        foreach (RDP.Texture rdpTex in textureCache.textures)
+        {
+            if (rdpTex == null || rdpTex.pixels == null || rdpTex.pixels.Length == 0)
+            {
+                Debug.LogError("Error parsing TEXTURE in cache for " + customName);
+                continue;
+            }
+
+            var texture = new Texture2D((int)rdpTex.width, (int)rdpTex.height, TextureFormat.RGBA32, mipChain: false);
+            texture.name = rdpTex.name;
+
+            // RGBA8 = 4 bytes por píxel
+            int expectedLength = (int)(rdpTex.width * rdpTex.height * 4);
+            if (rdpTex.pixels.Length < expectedLength)
+            {
+                Debug.LogError($"Pixel buffer too small: expected {expectedLength}, got {rdpTex.pixels.Length}");
+                continue;
+            }
+
+            // Cargar directamente los bytes al texture
+            texture.LoadRawTextureData(rdpTex.pixels);
+            texture.Apply();
+
+            list.Add(texture);
+        }
+
+        return list;
+    }
+
+    public static List<Material> BuildMaterialsFromData(List<MaterialData> materialData, List<Texture2D> loadedTextures)
+    {
+        Debug.Log("MaterialData Count: " + materialData.Count);
+        Debug.Log("Loaded Texture Count: " + loadedTextures.Count);
+
+        List<Material> materials = new List<Material>();
+        var defaultMat = new Material(Shader.Find("Standard"));
+        defaultMat.color = Color.white;
+        
+        if (materialData == null || materialData.Count == 0 || loadedTextures == null ||  materialData.Count == 0)
+        {
+            materials.Add(defaultMat);
+            return materials;
+        }
+
+        materials.Add(defaultMat);
+
+        foreach (var md in materialData)
+        {
+            foreach (var ut in md.UsedTextures)
+            {
+                Debug.Log("===========" );
+                Debug.Log("TEXTURE ID: " + ut.TextureID);
+                Debug.Log("TEXTURE PAL: " + ut.PAL);
+                Debug.Log("TEXTURE Index: " + ut.Index);
+                Debug.Log("===========" );
+            }
+        }
+
+        return materials;
+    }
+    public static PKSnap_Room SpawnFromRoomData(Room data, string customName, Transform parent)
+    {
+        Debug.Log("Parsing Room: " + customName);
+        Dictionary<long, List<PKSnap_ObjectData>> roomObjectDict = new Dictionary<long, List<PKSnap_ObjectData>>();
+        List<Texture2D> textures = BuildTexturesFromTextureCache(data.Node.Model.SharedOutput.TextureCache, customName);
+        List<Material> materials = BuildMaterialsFromData(data.Node.Materials, textures);
         GameObject go = new GameObject(customName);
         go.transform.parent = parent;
         go.transform.position = data.Node.Translation;
         go.transform.rotation = Quaternion.Euler(data.Node.Euler);
         go.transform.localScale = data.Node.Scale;
-
+        PKSnap_Room pkRoom = go.AddComponent<PKSnap_Room>();
         var model = data.Node.Model;
         var mesh = BuildMeshFromRSPVertices(model.SharedOutput.Vertices, model.SharedOutput.Indices);
         if (mesh != null)
         {
             var mr = go.AddComponent<MeshRenderer>();
-            // Crear un material estándar
-            var material = new Material(Shader.Find("Standard"));
 
-            // Opcional: configurar color base
-            material.color = Color.white;
-
-            // Asignar el material al renderer
-            mr.material = material;
+            mr.materials = materials.ToArray();
             var mf = go.AddComponent<MeshFilter>();
             mf.sharedMesh = mesh;
         }
+        
+
+        foreach (var o in data.Objects)
+        {
+            GameObject ob = new GameObject("[Room Object: " + o.ID + "]");
+            ob.transform.parent = go.transform;
+            ob.transform.transform.position = o.Position;
+            ob.transform.rotation = Quaternion.Euler(o.Euler);
+            ob.transform.localScale = o.Scale;
+            PKSnap_ObjectData odata = ob.AddComponent<PKSnap_ObjectData>();
+            odata.Behaviour = o.Behaviour;
+            odata.ID = o.ID;
+            odata.Path = new PKSnap_TrackPath();
+            if (o.Path != null)
+            {
+                odata.Path.Duration = o.Path.Duration;
+                odata.Path.Kind = o.Path.Kind;
+                odata.Path.Length = o.Path.Length;
+                odata.Path.SegmentRate = o.Path.SegmentRate;
+                odata.Path.Times = (float[])o.Path.Times.ToArray();
+                odata.Path.Points = (float[])o.Path.Points.ToArray();
+                odata.Path.Quartics = (float[])o.Path.Quartics.ToArray();
+            }
+            if (!roomObjectDict.ContainsKey(o.ID))
+            {
+                roomObjectDict.Add(o.ID, new List<PKSnap_ObjectData>() { odata });
+            }
+            else
+            {
+                roomObjectDict[o.ID].Add(odata);
+            }
+        }
+
+        pkRoom.InitRoom(roomObjectDict, textures);
+        return pkRoom;
     }
 
     public static Mesh BuildMeshFromRSPVertices(List<RSPVertex> vertices, List<long> indices)
@@ -92,7 +268,7 @@ public class SceneCreator : EditorWindow
             var v = vertices[i];
             unityVerts[i] = new Vector3((float)v.x, (float)v.y, (float)v.z);
             unityColors[i] = new Color((float)v.c0, (float)v.c1, (float)v.c2, (float)v.a);
-            unityUVs[i] = new Vector2((float)v.tx, (float)v.ty); // Puede que necesites normalizar
+            unityUVs[i] = new Vector2((float)v.tx, (float)v.ty /32); // Puede que necesites normalizar
         }
 
         // Suponemos que los indices ya están bien formados en tríos
@@ -306,19 +482,19 @@ public class SceneCreator : EditorWindow
 
         var pathView = dataMap.GetView(pathRooms);
         long offs = 0;
-        while (pathView.GetUint32(offs, false) != 0)
+        while (pathView.GetUint32(offs) != 0)
         {
             rooms.Add(ParseRoom(dataMap, pathView.GetUint32(offs, false), sharedCache));
             offs += 4;
         }
 
+        offs = 0;
         // also different material handling?
         var nonPathView = dataMap.GetView(nonPathRooms);
-        long Offs = 0;
-        while (nonPathView.GetUint32(Offs) != 0)
+        while (nonPathView.GetUint32(offs) != 0)
         {
-            rooms.Add(ParseRoom(dataMap, nonPathView.GetUint32(Offs), sharedCache));
-            Offs += 4;
+            rooms.Add(ParseRoom(dataMap, nonPathView.GetUint32(offs), sharedCache));
+            offs += 4;
         }
 
         if (level.Name == 0x1C)
@@ -1037,6 +1213,8 @@ public class SceneCreator : EditorWindow
         }
         catch (System.Exception ex)
         {
+
+            UnityEngine.Debug.LogError("Error parsing ACTORDEF");
             UnityEngine.Debug.LogError($"Error parsing Object {id}: {ex.Message} - {ex.StackTrace}");
             return null;
         }
@@ -1442,25 +1620,25 @@ public class SceneCreator : EditorWindow
     {
         var view = dataMap.GetView(roomStart);
 
-        long roomGeoStart = view.GetUint32(0x00, false);
+        var roomGeoStart = view.GetUint32(0x00);
         Vector3 pos = GetVec3(view, 0x04);
-        float yaw = view.GetFloat32(0x10, false);
+        float yaw = view.GetFloat32(0x10);
         if (yaw != 0)
             throw new System.Exception("Yaw must be 0");
 
-        long staticSpawns = view.GetUint32(0x18, false);
-        long objectSpawns = view.GetUint32(0x1C, false);
+        var staticSpawns = view.GetUint32(0x18);
+        var objectSpawns = view.GetUint32(0x1C);
 
         pos *= 100;
 
         var roomView = dataMap.GetView(roomGeoStart);
-        long dlStart = roomView.GetUint32(0x00, false);
-        long materialData = roomView.GetUint32(0x04, false);
-        long animData = roomView.GetUint32(0x08, false);
-        long renderer = roomView.GetUint32(0x0C, false);
-        long graphStart = roomView.GetUint32(0x10, false);
-        long moreAnimData = roomView.GetUint32(0x18, false);
-        long animTimeScale = roomView.GetUint32(0x1C, false);
+        var dlStart = roomView.GetUint32(0x00);
+        var materialData = roomView.GetUint32(0x04);
+        var animData = roomView.GetUint32(0x08);
+        var renderer = roomView.GetUint32(0x0C);
+        var graphStart = roomView.GetUint32(0x10);
+        var moreAnimData = roomView.GetUint32(0x18);
+        var animTimeScale = roomView.GetUint32(0x1C);
 
         var sharedOutput = new RSPSharedOutput();
         sharedOutput.TextureCache = sharedCache;

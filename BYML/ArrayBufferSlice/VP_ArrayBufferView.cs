@@ -449,5 +449,10 @@ namespace VirtualPhenix.Nintendo64
         {
             return this;
         }
+
+        public virtual object ToArray()
+        {
+            return null;
+        }
     }
 }

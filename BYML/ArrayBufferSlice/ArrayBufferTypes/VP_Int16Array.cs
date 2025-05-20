@@ -65,5 +65,18 @@ namespace VirtualPhenix.Nintendo64
         {
             return new VP_Int16Array<T>(buffer, byteOffset, byteLength);
         }
+
+        public override object ToArray()
+        {
+            long count = this.Length; // hereda de VP_ArrayBufferView
+            short[] result = new short[count];
+
+            for (long i = 0; i < count; i++)
+            {
+                result[i] = (short)this[i]; // usa tu indexador
+            }
+
+            return result;
+        }
     }
 }

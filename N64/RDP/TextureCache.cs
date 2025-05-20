@@ -14,7 +14,7 @@ namespace VirtualPhenix.Nintendo64.RDP
             for (int i = 0; i < textures.Count; i++)
             {
                 var t = textures[i];
-                if (t.dramAddr == dramAddr && ((ImageFormat)tile.fmt != ImageFormat.CI || t.dramPalAddr == dramPalAddr) && TextureMatch(t.tile, tile))
+                if (t.dramAddr == dramAddr && ((ImageFormat)tile.fmt != ImageFormat.CI || t.dramPalAddr == dramPalAddr) && TextureCacheUtils.TextureMatch(t.tile, tile))
                     return i;
             }
 
@@ -22,16 +22,6 @@ namespace VirtualPhenix.Nintendo64.RDP
             long index = textures.Count;
             textures.Add(texture);
             return index;
-        }
-
-        private bool TextureMatch(TileState a, TileState b)
-        {
-            return a.fmt == b.fmt && a.siz == b.siz && a.line == b.line &&
-                   a.palette == b.palette && a.cmt == b.cmt && a.cms == b.cms &&
-                   a.maskt == b.maskt && a.masks == b.masks &&
-                   a.shiftt == b.shiftt && a.shifts == b.shifts &&
-                   a.uls == b.uls && a.ult == b.ult &&
-                   a.lrs == b.lrs && a.lrt == b.lrt;
         }
     }
 }

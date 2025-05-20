@@ -59,8 +59,6 @@ namespace VirtualPhenix.Nintendo64
             get { return TypedArrayKind.Float32; }
         }
 
-        public int BytesPerElement => throw new NotImplementedException();
-
         public override int GetBytesPerElement() => BYTES_PER_ELEMENT;
 
         public override object GetElement(long index) => this[index];
@@ -79,6 +77,19 @@ namespace VirtualPhenix.Nintendo64
         public override VP_ArrayBufferView<T> CreateSubarrayInstance(T buffer, long byteOffset, long byteLength)
         {
             return new VP_Float32Array<T>(buffer, byteOffset, byteLength);
+        }
+
+        public override object ToArray()
+        {
+            long count = this.Length; // hereda de VP_ArrayBufferView
+            float[] result = new float[count];
+
+            for (long i = 0; i < count; i++)
+            {
+                result[i] = (float)this[i]; // usa tu indexador
+            }
+
+            return result;
         }
     }
 }
