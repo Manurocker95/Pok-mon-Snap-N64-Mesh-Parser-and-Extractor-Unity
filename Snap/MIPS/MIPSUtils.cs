@@ -113,7 +113,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 VP_Float32Array<VP_ArrayBuffer> data;
                 List<Vector4> colors = new List<Vector4>();
 
-                if (kind >= EntryKind.ColorStepBlock)
+                if ((long)kind >= (long)EntryKind.ColorStepBlock)
                 {
                     for (long i = 0; i < count; i++)
                     {
@@ -136,7 +136,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                     Block = block,
                     Data = data,
                     Path = null,
-                    Colors = new List<Vector4>()
+                    Colors = colors
                 };
 
                 if (kind == EntryKind.Path)
@@ -303,7 +303,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             var dc = model.RSPOutput?.DrawCalls.Find(d => (d as DrawCall).materialIndex == index);
             if (dc == null)
             {
-                Debug.LogError("No corresponding draw call for material");
+                //Debug.LogError("No corresponding draw call for material");
                 return;
             }
 
@@ -314,7 +314,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 matData.Optional = true;
             }
 
-            var dummyAnimator = new CRGAnimator();
+            var dummyAnimator = new CRGAnimator(true);
             var dummyTiles = new List<TileState>();
             dummyAnimator.SetTrack(track);
             var buffer = dataMap.GetRange(dataMap.Deref(matData.TextureStart));

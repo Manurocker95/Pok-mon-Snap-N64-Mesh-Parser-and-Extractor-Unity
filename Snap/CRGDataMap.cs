@@ -23,7 +23,7 @@ public class CRGDataMap
     {
         for (int i = 0; i < ranges.Count; i++)
         {
-            if (ranges[i].Overlay != null && this.overlay != 0 && ranges[i].Overlay != this.overlay)
+            if ((ranges[i].Overlay != null && ranges[i].Overlay == 1) && (this.overlay != null && this.overlay == 1) && ranges[i].Overlay != this.overlay)
                 continue;
 
             var offset = addr - ranges[i].Start;

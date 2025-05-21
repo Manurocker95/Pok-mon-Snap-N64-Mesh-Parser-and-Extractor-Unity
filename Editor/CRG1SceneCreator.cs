@@ -7,6 +7,7 @@ using VirtualPhenix.Nintendo64.BanjoKazooie;
 using System.IO;
 using System;
 using VirtualPhenix.PokemonSnap64;
+using System.Runtime.InteropServices.ComTypes;
 
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap { 
@@ -122,7 +123,35 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap {
             }
             else
             {
+                go.transform.localScale = Vector3.one * 0.1f;
+                ActorDef actorData = (ActorDef)data;
+                foreach (var node in actorData.Nodes)
+                {
+                    if (node.Model != null)
+                    {
+                        GameObject subMesh = new GameObject("[SUBMESH]");
+                        subMesh.transform.parent = go.transform;
+                        Debug.Log("Parent: " + node.Parent);
+                        Debug.Log("Billboard: " + node.Billboard);
 
+                        subMesh.transform.SetLocalPositionAndRotation(node.Translation, Quaternion.Euler(node.Euler));
+                        subMesh.transform.localScale = node.Scale;
+
+                        var materials = BuildMaterialsFromData(node.Materials, textures);
+                        var mesh = BuildMeshFromRSPVertices(node.Model.SharedOutput.Vertices, node.Model.SharedOutput.Indices);
+                        if (mesh != null)
+                        {
+                            var mr = subMesh.AddComponent<MeshRenderer>();
+                            mr.materials = materials.ToArray();
+                            var mf = subMesh.AddComponent<MeshFilter>();
+                            mf.sharedMesh = mesh;
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("SubNode has no Model");
+                    }
+                }
             }
 
 
@@ -563,7 +592,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap {
                 {
                     var id = objFunctionView.GetInt32(offs2 + 0x00, false);
                     var initFunc = objFunctionView.GetUint32(offs2 + 0x04, false);
-                    offs += 0x10;
+                    offs2 += 0x10;
 
                     var o = ParseObject(dataMap, id, initFunc);
                     if (o != null)
@@ -649,8 +678,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap {
             if (level.Collision != 0)
                 collision = ParseCollisionTree(dataMap, level.Collision);
 
-            var levelParticles = ParticleUtils.ParseParticles(archives[0].ParticleData, false);
-            var pesterParticles = archives.Count > 1 ? ParticleUtils.ParseParticles(archives[1].ParticleData, true) : new CustomParticleSystem();
+            var levelParticles = new CustomParticleSystem();//ParticleUtils.ParseParticles(archives[0].ParticleData, false);
+            var pesterParticles = new CustomParticleSystem();//archives.Count > 1 ? ParticleUtils.ParseParticles(archives[1].ParticleData, true) : new CustomParticleSystem();
 
             var eggData = BuildEggData(dataMap, level.Name);
 
@@ -1166,55 +1195,55 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap {
 
         public static ActorDef ParseObject(CRGDataMap dataMap, long id, long initFunc)
         {
+            var dataFinder = new MIPS.ObjectDataFinder();
+
+            var initView = dataMap.GetView(initFunc);
+            if (!dataFinder.ParseFromView(initView) && initFunc != 0x802EAF18)
+                throw new System.Exception($"bad parse for init function {initFunc:X8}");
+
+            var objectView = dataMap.GetView(dataFinder.DataAddress);
+
+            long graphStart = objectView.GetUint32(0x00, false);
+            long materials = objectView.GetUint32(0x04, false);
+            long renderer = objectView.GetUint32(0x08, false);
+
+            bool usePhoto = false;
+
+            if (id != 93 && id != 101)
+            {
+                var photoView = dataMap.GetView(photoDataStart);
+                long offs = 0;
+                while (offs < photoView.ByteLength)
+                {
+                    long photoID = photoView.GetUint32(offs, false);
+                    if (photoID != id)
+                    {
+                        offs += 0x14;
+                        continue;
+                    }
+
+                    graphStart = photoView.GetUint32(offs + 0x08, false);
+                    materials = photoView.GetUint32(offs + 0x0C, false);
+                    renderer = photoView.GetUint32(offs + 0x10, false);
+                    usePhoto = true;
+                    break;
+                }
+            }
+
+            long animationStart = objectView.GetUint32(0x0C, false);
+            var scale = GetVec3(objectView, 0x10);
+            var center = GetVec3(objectView, 0x1C);
+            float radius = objectView.GetFloat32(0x28, false) * scale.y;
+            ushort flags = objectView.GetUint16(0x2C, false);
+            long extraTransforms = objectView.GetUint32(0x2E, false) >> 8;
+
+            center = Div(center, scale);
+            scale = MulScalar(scale, 0.1f);
+
+            var sharedOutput = new RSPSharedOutput();
+
             try
             {
-                var dataFinder = new MIPS.ObjectDataFinder();
-
-                var initView = dataMap.GetView(initFunc);
-                if (!dataFinder.ParseFromView(initView) && initFunc != 0x802EAF18)
-                    throw new System.Exception($"bad parse for init function {initFunc:X8}");
-
-                var objectView = dataMap.GetView(dataFinder.DataAddress);
-
-                long graphStart = objectView.GetUint32(0x00, false);
-                long materials = objectView.GetUint32(0x04, false);
-                long renderer = objectView.GetUint32(0x08, false);
-
-                bool usePhoto = false;
-
-                if (id != 93 && id != 101)
-                {
-                    var photoView = dataMap.GetView(photoDataStart);
-                    long offs = 0;
-                    while (offs < photoView.ByteLength)
-                    {
-                        long photoID = photoView.GetUint32(offs, false);
-                        if (photoID != id)
-                        {
-                            offs += 0x14;
-                            continue;
-                        }
-
-                        graphStart = photoView.GetUint32(offs + 0x08, false);
-                        materials = photoView.GetUint32(offs + 0x0C, false);
-                        renderer = photoView.GetUint32(offs + 0x10, false);
-                        usePhoto = true;
-                        break;
-                    }
-                }
-
-                long animationStart = objectView.GetUint32(0x0C, false);
-                var scale = GetVec3(objectView, 0x10);
-                var center = GetVec3(objectView, 0x1C);
-                float radius = objectView.GetFloat32(0x28, false) * scale.y;
-                ushort flags = objectView.GetUint16(0x2C, false);
-                long extraTransforms = objectView.GetUint32(0x2E, false) >> 8;
-
-                center = Div(center, scale);
-                scale = MulScalar(scale, 0.1f);
-
-                var sharedOutput = new RSPSharedOutput();
-
                 if (usePhoto && id != 1003)
                     dataMap.overlay = 2;
 
@@ -1239,9 +1268,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap {
             }
             catch (System.Exception ex)
             {
-
-                UnityEngine.Debug.LogError("Error parsing ACTORDEF");
-                UnityEngine.Debug.LogError($"Error parsing Object {id}: {ex.Message} - {ex.StackTrace}");
+                Debug.LogError(ex);
                 return null;
             }
         }

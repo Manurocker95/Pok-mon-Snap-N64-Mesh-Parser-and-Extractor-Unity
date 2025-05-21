@@ -2,7 +2,7 @@
 
 namespace VirtualPhenix.Nintendo64.MIPS
 {
-    public class ObjectDataFinder : NaiveInterpreter
+    public class ObjectDataFinder : MIPS.NaiveInterpreter
     {
         public long SpawnFunc { get; private set; } = 0;
         public long DataAddress { get; private set; } = 0;
