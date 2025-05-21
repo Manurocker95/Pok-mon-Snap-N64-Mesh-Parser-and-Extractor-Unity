@@ -654,6 +654,13 @@ namespace VirtualPhenix.Nintendo64
 			return obj;
 		}
 
+        public static Endianness GetSystemEndianness()
+        {
+            var test = new VP_Uint16Array(new VP_ArrayBuffer(0xFEFF));
+            var testView = new VP_DataView<VP_ArrayBuffer>(new VP_ArrayBuffer(test.Buffer));
+            return (testView.GetUint8(0) == 0xFF) ? Endianness.LittleEndian : Endianness.BigEndian;
+        }
+
 		public static object Parse(byte[] bufferBytes, FileType fileType = FileType.BYML, ParseOptions opt = null)
         {
             return Parse<NodeDict>(new VP_ArrayBufferSlice(bufferBytes), fileType, opt, false);

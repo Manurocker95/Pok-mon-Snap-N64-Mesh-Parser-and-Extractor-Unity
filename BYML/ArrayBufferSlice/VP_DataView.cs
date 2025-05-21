@@ -7,6 +7,12 @@ namespace VirtualPhenix.Nintendo64
     {
         public VP_DataView(VP_ArrayBuffer buffer, long byteOffset = 0, long? byteLength = null) : base(buffer, byteOffset, byteLength)
         {
+
+        }
+
+        public VP_DataView(VP_ArrayBufferSlice subArray) : base (subArray)
+        {
+
         }
     }
 
@@ -24,12 +30,30 @@ namespace VirtualPhenix.Nintendo64
         {
             get { return Buffer.LongLength; }
         }
+        
+        public VP_DataView(VP_ArrayBufferSlice subArray) 
+        {
+            var byteLength = subArray.ByteLength;
+            var byteOffset = subArray.ByteOffset;
+            var buffer = (T)subArray.Buffer;
+
+            if (buffer == null)
+                throw new System.ArgumentNullException("Buffer in DataView by Slice");
+
+
+            InitDataView(buffer, byteOffset, byteLength);
+        }
 
         public VP_DataView(T buffer, long byteOffset = 0, long? byteLength = null)
         {
             if (buffer == null)
-                throw new System.ArgumentNullException("buffer");
+                throw new System.ArgumentNullException("Buffer in DataView");
 
+            InitDataView(buffer, byteOffset, byteLength);
+        }
+
+        public void InitDataView(T buffer, long byteOffset = 0, long? byteLength = null)
+        {
             long resolvedLength = byteLength ?? (buffer.ByteLength - byteOffset);
 
             if (byteOffset < 0 || resolvedLength < 0 || (byteOffset + resolvedLength) > buffer.ByteLength)

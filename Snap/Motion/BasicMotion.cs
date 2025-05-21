@@ -10,6 +10,6 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
         public override MotionKind Kind => MotionKind.basic;
 
         public BasicMotionKind Subtype;
-        public long Param;
+        public double Param;
     }
 }

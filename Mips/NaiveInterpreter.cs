@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Reflection.Emit;
 using VirtualPhenix.Nintendo64;
 
 namespace VirtualPhenix.Nintendo64.MIPS
@@ -33,7 +35,7 @@ namespace VirtualPhenix.Nintendo64.MIPS
             LastInstr = 0;
         }
 
-        protected virtual long HandleFunction(long func, Register a0, Register a1, Register a2, Register a3, Register[] stackArgs)
+        protected virtual long HandleFunction(long func, Register a0, Register a1, Register a2, Register a3, Register[] stackArgs, MIPS.BranchInfo branch = null)
         {
             return 0;
         }
@@ -99,6 +101,12 @@ namespace VirtualPhenix.Nintendo64.MIPS
                     return false;
             }
         }
+       
+        public virtual string GetOpcodeDescription(Opcode opcode)
+        {
+            int value = (int)opcode;
+            return $"{opcode} (0x{value:X}) - {value}";
+        }
 
         public virtual bool ParseFromView(VP_DataView view, long offset = 0)
         {
@@ -120,7 +128,7 @@ namespace VirtualPhenix.Nintendo64.MIPS
                 long frd = (long)((instr >> 6) & 0x1F);
                 short imm = (short)(instr & 0xFFFF);
                 ushort u_imm = (ushort)(instr & 0xFFFF);
-                
+                //UnityEngine.Debug.Log(GetOpcodeDescription(op));
                 switch (op)
                 {
                     case Opcode.NOP:
@@ -135,7 +143,50 @@ namespace VirtualPhenix.Nintendo64.MIPS
                                     throw new Exception("unconditional branch in the middle of if block");
                                 currBranch.End = offset + 8;
                             }
+                            break;
                         }
+                        // Don't try to track loops or nested conditionals
+                        if (imm <= 0)
+                        {
+                            HandleLoop(op, Regs[rs], Regs[rt], imm);
+                            break;
+                        }
+                        else if (currBranch != null)
+                        {
+                            HandleUnknown(op);
+                            break;
+                        }
+
+                        if (rs == 0 && rt == 0)
+                            throw new Exception("bad trivial branch");
+
+                        Register compReg2 = Regs[rt];
+                        if (rt == 0 || (rs != 0 && SeemsLikeLiteral(Regs[rs])))
+                            compReg2 = Regs[rs];
+
+                        Register comparator2 = new Register { LastOp = compReg2.LastOp, Value = compReg2.Value };
+
+                        // If the body starts right away, the condition is effectively inverted
+                        long start2 = offset + 8;
+                        long end2 = offset + 4 * (imm + 1);
+                        nextMeet = (long)Math.Max(nextMeet, end2);
+
+                        if (rs != 0 && rt != 0 && (op == Opcode.BEQ || op == Opcode.BEQL))
+                        {
+                            // if not comparing to zero, assume we are looking at
+                            //      if (x == y)
+                            // meaning "positive" branches jump to the start of the body
+                            start2 = end2;
+                            end2 = -1;
+                        }
+
+                        branches.Add(new BranchInfo
+                        {
+                            Op = op,
+                            Start = (long)start2,
+                            End = (long)end2,
+                            Comparator = comparator2
+                        });
                         break;
                     case Opcode.BNE:
                     case Opcode.BNEL:
@@ -222,7 +273,17 @@ namespace VirtualPhenix.Nintendo64.MIPS
                             var stored = StackArgs[stackIndex];
                             Regs[rt].Value = stored.Value;
                             Regs[rt].LastOp = stored.LastOp;
+                            break;
                         }
+                        Register targetLW = (op == Opcode.LWC1) ? FRegs[rt] : Regs[rt];
+                        if (imm == 0)
+                            targetLW.Value = GuessValue(Regs[rs]);
+                        else if ((Regs[rs].Value & 0xFFFF) == 0)
+                            targetLW.Value = GuessValue(Regs[rs]) + imm;
+                        else
+                            targetLW.Value = imm;
+
+                        targetLW.LastOp = op;
                         break;
                     case Opcode.LB:
                     case Opcode.LBU:

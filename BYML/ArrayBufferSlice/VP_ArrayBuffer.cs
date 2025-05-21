@@ -100,7 +100,9 @@ namespace VirtualPhenix.Nintendo64
             byte[] sliced = new byte[end.Value - start.Value];
             Array.Copy(Buffer, start.Value, sliced, 0, sliced.Length);
 
-            return new VP_ArrayBuffer(sliced); 
+            var ret = new VP_ArrayBuffer(sliced);
+
+            return ret;
         }
 
         public virtual int GetBytesPerElement()

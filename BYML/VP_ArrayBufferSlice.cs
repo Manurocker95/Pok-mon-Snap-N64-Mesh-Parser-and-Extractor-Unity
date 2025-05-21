@@ -198,8 +198,7 @@ namespace VirtualPhenix.Nintendo64
             else
             {
                 var sub = Subarray(offs, length);
-                return new VP_DataView(new VP_ArrayBuffer(Buffer), sub.ByteOffset, sub.ByteLength);
-                //return sub.CreateDefaultDataView();
+                return new VP_DataView(sub);
             }
         }
 

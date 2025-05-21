@@ -4,12 +4,11 @@ using UnityEngine;
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap
 {
-    [System.Serializable]
-    public class LinearPoint : Motion
+    public class LinearMotion : Motion
     {
         public override MotionKind Kind => MotionKind.linear;
 
-        public long Duration;
+        public float Duration;
         public Vector3 Velocity;
         public float TurnSpeed;
         public bool MatchTarget;

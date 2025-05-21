@@ -8,7 +8,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
     public class StateEdge
     {
         public InteractionType Type;
-        public long Param;
+        public double Param;
         public long Index;
         public long AuxFunc;
     }

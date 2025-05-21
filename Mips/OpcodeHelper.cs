@@ -126,7 +126,7 @@ namespace VirtualPhenix.Nintendo64.MIPS
         }
     }
 
-    public struct Register
+    public class Register
     {
         public long Value;
         public Opcode LastOp;

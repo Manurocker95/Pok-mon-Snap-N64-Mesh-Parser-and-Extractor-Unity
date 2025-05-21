@@ -16,7 +16,7 @@ namespace VirtualPhenix.Nintendo64.MIPS
             GlobalRef = 0;
         }
 
-        protected override long HandleFunction(long func, MIPS.Register a0, MIPS.Register a1, MIPS.Register a2, MIPS.Register a3, Register[] stackArgs)
+        protected override long HandleFunction(long func, MIPS.Register a0, MIPS.Register a1, MIPS.Register a2, MIPS.Register a3, Register[] stackArgs, MIPS.BranchInfo branch = null)
         {
             SpawnFunc = func;
             DataAddress = stackArgs[1].Value; // stack + 0x14

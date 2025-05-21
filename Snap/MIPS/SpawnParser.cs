@@ -23,7 +23,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             FoundSpawn = false;
         }
 
-        protected override long HandleFunction(long f, MIPS.Register a0, MIPS.Register a1, MIPS.Register a2, MIPS.Register a3, MIPS.Register[] stackArgs)
+        protected override long HandleFunction(long f, MIPS.Register a0, MIPS.Register a1, MIPS.Register a2, MIPS.Register a3, MIPS.Register[] stackArgs, MIPS.BranchInfo branch = null)
         {
             var func = (StateFuncs)f;
 
