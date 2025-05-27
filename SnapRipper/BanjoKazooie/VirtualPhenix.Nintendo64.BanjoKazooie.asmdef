@@ -1,0 +1,16 @@
+{
+    "name": "VirtualPhenix.Nintendo64.BanjoKazooie",
+    "rootNamespace": "VirtualPhenix.Nintendo64.BanjoKazooie",
+    "references": [
+        "GUID:309680dea9fbcc74ab1ba1f5ed452e91"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

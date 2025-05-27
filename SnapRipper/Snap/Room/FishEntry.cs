@@ -1,0 +1,13 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace VirtualPhenix.Nintendo64.PokemonSnap
+{
+    [System.Serializable]
+    public class FishEntry 
+    {
+        public float Probability;
+        public long ID;
+    }
+}
