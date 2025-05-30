@@ -119,11 +119,15 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
         public Emitter CreateEmitter(bool common, int index, Matrix4x4? mat)
         {
+            var system = common ? Common : Level;
+            if (system.Emitters == null || index >= system.Emitters.Count)
+                return null;
+
             for (int i = 0; i < EmitterPool.Count; i++)
             {
                 if (EmitterPool[i].Timer >= 0)
                     continue;
-                var system = common ? Common : Level;
+            
                 EmitterPool[i].Activate(system.Emitters[index], mat);
                 return EmitterPool[i];
             }
@@ -151,7 +155,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
            return new List<GfxBindingLayoutDescriptor>() { new GfxBindingLayoutDescriptor() { NumUniformBuffers = 2, NumSamplers = 1 } };
         }
 
-        public void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput)
+        public void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, bool _flush = false)
         {
             var dt = viewerInput.DeltaTime * 30.0 / 1000.0;
 
@@ -168,6 +172,9 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                     continue;
                 ParticlePool[i].Update(dt, this);
             }
+
+            if (!_flush)
+                return;
 
             var template = renderInstManager.PushTemplate();
             template.SetBindingLayouts(BindingLayouts());

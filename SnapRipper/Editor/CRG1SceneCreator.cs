@@ -6,14 +6,16 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+
 using VirtualPhenix.Nintendo64.BanjoKazooie;
 using VirtualPhenix.PokemonSnap64;
-
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap 
 { 
     public class SceneCreator : EditorWindow
     {
+        public static float GlobalScale = .01f;
+
         public class LoadedLevelArchives
         {
             public List<CRGPokemonArchive> Pokemon;
@@ -29,7 +31,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
         [MenuItem("Pokemon Snap/Parse Scene Models")]
         static void ParseSceneModels()
         {
-            string defaultID = "10";
+
+            string defaultID = "10"; 
             var list = GetArcFileListById(defaultID);
             var archives = LoadLevelArchives(list);
             var parsedLevel = ParseLevel(archives);
@@ -193,6 +196,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             GameObject go = new GameObject("[Level "+ level.Name+"]");
             var pkLevel = go.AddComponent<PKSnap_Level>();
             pkLevel.SetSnapRenderer(snapRenderer);
+            //go.transform.localScale = new Vector3(-1f, 1f, 1f);
 
             var skyboxRoom = SpawnFromRoomData(level.Skybox, "Skybox", go.transform, -1, snapRenderer);
             PKSnap_Skybox skybox = skyboxRoom.gameObject.AddComponent<PKSnap_Skybox>();
@@ -210,6 +214,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             var staticActors = snapRenderer.StaticActorData;
             foreach (var mdls in staticActors.ModelRenderers)
             {
+                mdls.SetAnimation(0);
+
                 PKSnap_Actor spawnedActor = SpawnActorFromStaticModelRenderer(mdls, "[Static Actor " + mdls.ID + "]", go.transform, mdls.ID, snapRenderer);
                 var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
                 pkLevel.AddStaticActors(instActors);
@@ -222,8 +228,9 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
                 foreach (var act in instActors)
                 {
-                    act.transform.localScale *= 0.1f;
-                    act.transform.localPosition = Vector3.zero;
+                    // TODO
+                    //act.transform.localScale *= 0.5f;
+                    //act.transform.localPosition = Vector3.zero;
                 }
 
                 pkLevel.AddDynamicActors(instActors);
@@ -232,65 +239,252 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             ZeroOne zeroOne = snapRenderer.LevelGlobals.Level.ZeroOne;
             PKSnap_ZeroOne pkZero = SpawnZeroOneObject(zeroOne, snapRenderer.LevelGlobals.ZeroOne, pkLevel, go.transform);
             pkLevel.SetZeroOne(pkZero);
+            pkLevel.ForceUpdate();
 
-            go.transform.localScale = new Vector3(-0.01f, 0.01f, 0.01f);
+            // TODO
+            go.transform.localScale = new Vector3(-1f, 1f, 1f);
         }
 
         public static PKSnap_Actor SpawnActorFromDynamicModelRenderer(ModelRenderer data, string customName, Transform parent, long id, SnapRenderer snapRenderer)
         {
             GameObject go = new GameObject(customName);
-            go.transform.parent = parent;
+            var actor = go.AddComponent<PKSnap_Actor>();         
             bool visible = data.Visible;
 
             Actor parsedActor = (Actor)data;
 
             var sharedOutput = data.SharedOutput;
             var textures = new List<Texture2D>();
-            BuildMeshAndBonesFromData(customName, "Actor " + parsedActor.ID, go.transform, sharedOutput, parsedActor.Renderers, out textures);
+         
+            var smr = BuildMeshAndBonesFromData(actor, customName, parsedActor.ID, go.transform, sharedOutput, parsedActor.Renderers, out textures, data.Nodes, data.Animations);
+            actor.InitActor(id, textures, visible, smr, data);
+            go.transform.parent = parent;
 
-            var actor = go.AddComponent<PKSnap_Actor>();
-            actor.InitActor(id, textures, visible);
             return actor;
         }
 
-        public static Mesh BuildMeshAndBonesFromData(string customName, string id, Transform mainObjectTRS, RSPSharedOutput sharedOutput, List<NodeRenderer> renderers, out List<Texture2D> textures)
+        public static BoneWeight[] ParseBoneWeights(List<NodeRenderer> renderers, RSPSharedOutput sharedOutput, List<Transform> bones, Dictionary<NodeRenderer, int> nodeToBoneIndexMap)
+        {
+            var vertexToBone = ParseVerticesToBones(renderers, sharedOutput, bones, nodeToBoneIndexMap);
+
+            BoneWeight[] boneWeights = new BoneWeight[sharedOutput.Vertices.Count];
+
+            for (int i = 0; i < boneWeights.Length; i++)
+            {
+                if (vertexToBone.TryGetValue(i, out int boneIndex))
+                {
+                   
+                    boneWeights[i] = new BoneWeight
+                    {
+                        boneIndex0 = boneIndex,
+                        weight0 = 1.0f,
+                        boneIndex1 = 0,
+                        weight1 = 0f,
+                        boneIndex2 = 0,
+                        weight2 = 0f,
+                        boneIndex3 = 0,
+                        weight3 = 0f
+                    };
+                }
+                else
+                {
+                    // fallback para v�rtices no usados (si existen)
+                    boneWeights[i] = new BoneWeight
+                    {
+                        boneIndex0 = 0,
+                        weight0 = 1.0f,
+                        boneIndex1 = 0,
+                        weight1 = 0f,
+                        boneIndex2 = 0,
+                        weight2 = 0f,
+                        boneIndex3 = 0,
+                        weight3 = 0f
+                    };
+                }
+            }
+
+            return boneWeights;
+        }
+
+        public static Dictionary<int, int> ParseVerticesToBones(List<NodeRenderer> renderers, RSPSharedOutput sharedOutput, List<Transform> bones, Dictionary<NodeRenderer, int> nodeToBoneIndexMap)
+        {
+            Dictionary<int, int> vertexToBone = new Dictionary<int, int>();
+
+            foreach (var node in renderers)
+            {
+                if (!nodeToBoneIndexMap.TryGetValue(node, out int boneIndex))
+                    continue;
+
+                foreach (var drawcall in node.DrawCalls)
+                {
+                    for (int i = drawcall.DrawCallInfo.FirstIndex; i < drawcall.DrawCallInfo.FirstIndex + drawcall.DrawCallInfo.IndexCount; i++)
+                    {
+                        var vertexIndex = (int)sharedOutput.Indices[i];
+
+                        if (!vertexToBone.ContainsKey(vertexIndex))
+                        {
+                            vertexToBone[vertexIndex] = boneIndex;
+                        }
+                        else if (vertexToBone[vertexIndex] != boneIndex)
+                        {
+                            Debug.LogWarning($"Vertex {vertexIndex} was used for multiple bones: ({vertexToBone[vertexIndex]} and {boneIndex}).");
+                       
+                        }
+                    }
+                }
+            }
+
+            return vertexToBone;
+        }
+
+        public static SkinnedMeshRenderer BuildMeshAndBonesFromData(PKSnap_Actor actor, string customName, long id, Transform mainObjectTRS, 
+            RSPSharedOutput sharedOutput, List<NodeRenderer> renderers, out List<Texture2D> textures, List<GFXNode> nodeList, List<AnimationData> animationList)
         {
             var materials = new List<Material>();
 
-            var mesh = BuildMeshFromDrawCallRSPVertices(customName, sharedOutput.Vertices, sharedOutput.Indices, renderers, out materials, out textures);
+            var mesh = BuildMeshFromNodeRendererList(customName, sharedOutput.Vertices, sharedOutput.Indices, renderers, out materials, out textures);
+            SkinnedMeshRenderer smr = null;
+            Matrix4x4 localToWorldMatrix = Matrix4x4.identity;
 
             if (mesh != null)
             {
-                GameObject meshObj = new GameObject("[" + id + " Mesh]");
+                GameObject meshObj = new GameObject("[Actor " + (id == -1 ? customName : id) + " Mesh]");
                 meshObj.transform.parent = mainObjectTRS;
                 meshObj.transform.localPosition = Vector3.zero;
                 meshObj.transform.localRotation = Quaternion.identity;
                 meshObj.transform.localScale = Vector3.one;
 
-                SkinnedMeshRenderer smr = meshObj.AddComponent<SkinnedMeshRenderer>();
+                var needToMirror = id != 1004;
+   
+                smr = meshObj.AddComponent<SkinnedMeshRenderer>();
                 List<Transform> bones = new List<Transform>();
                 List<Matrix4x4> bindPoseMatrixArray = new List<Matrix4x4>();
-
+                List<Matrix4x4> modelMatricesArray = new List<Matrix4x4>();
+                Dictionary<NodeRenderer, int> nodeToBoneIndexMap = new Dictionary<NodeRenderer, int>();
                 var topBone = new GameObject("TopJoint");
                 topBone.transform.parent = mainObjectTRS;
+                topBone.transform.localScale = Vector3.one;
+                //localToWorldMatrix = topBone.transform.localToWorldMatrix;
+
+
+
                 // Bones
                 int i = 0;
+                int rendererIdx = 0;
                 foreach (var renderer in renderers)
                 {
-                    i = ParseActorBones(renderer, topBone.transform, i, ref bones, ref bindPoseMatrixArray);
-                    i++;
+                    if (rendererIdx == 0)
+                    {
+                        localToWorldMatrix = renderer.ModelMatrix.transpose;
+                        // Only the first NodeRenderer has the bone hierarchy, the rest are duplicates to access bones by index
+                        ParseActorBones(actor, renderer, topBone.transform, ref i, ref bones, ref bindPoseMatrixArray, ref localToWorldMatrix, ref nodeToBoneIndexMap, nodeList.Count, needToMirror, ref modelMatricesArray);
+                    }
+                    
+                    rendererIdx++;
                 }
 
-                smr.sharedMesh = mesh;
-                smr.bones = bones.ToArray();
-                smr.rootBone = topBone.transform;
-                smr.materials = materials.ToArray();
+                var boneWeights = ParseBoneWeights(renderers, sharedOutput, bones, nodeToBoneIndexMap);
 
+                smr.sharedMesh = mesh;
+                smr.rootBone = topBone.transform;
+                smr.bones = bones.ToArray();
                 mesh.bindposes = bindPoseMatrixArray.ToArray();
+                mesh.boneWeights = boneWeights;
+
+                smr.materials = materials.ToArray();
             }
 
-            return mesh;
+            return smr;
         }
+
+        public static Vector3[] RevertTransformedVertices(Vector3[] vertices, BoneWeight[] boneWeights, Matrix4x4[] boneModelMatricesN64)
+        {
+            Vector3[] correctedVertices = new Vector3[vertices.Length];
+
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (i > boneWeights.Length)
+                {
+                    Debug.LogError("BW: " + boneWeights.Length + "  - i: " + i);
+                }
+
+                int boneIndex = boneWeights[i].boneIndex0;
+
+                if (boneIndex < 0 || boneIndex >= boneModelMatricesN64.Length)
+                {
+                    Debug.LogWarning($"Vértice {i} tiene boneIndex fuera de rango: {boneIndex}");
+                    correctedVertices[i] = vertices[i];
+                    continue;
+                }
+
+                // Convertimos la matriz a formato Unity (fila mayor)
+                Matrix4x4 n64Matrix = boneModelMatricesN64[boneIndex];
+                Matrix4x4 unityMatrix = n64Matrix.transpose;
+
+                // Revertimos la transformación aplicada
+                correctedVertices[i] = unityMatrix.inverse.MultiplyPoint3x4(vertices[i]);
+            }
+
+            return correctedVertices;
+        }
+
+        public static SkinnedMeshRenderer BuildSkinnedMeshAndBonesFromData(PKSnap_Actor actor, string customName, long id, Transform mainObjectTRS,
+           RSPSharedOutput sharedOutput, List<NodeRenderer> renderers, out List<Texture2D> textures, List<GFXNode> nodeList, List<AnimationData> animationList)
+        {
+            var materials = new List<Material>();
+
+            var mesh = BuildMeshFromNodeRendererList(customName, sharedOutput.Vertices, sharedOutput.Indices, renderers, out materials, out textures);
+            SkinnedMeshRenderer smr = null;
+            Matrix4x4 localToWorldMatrix = Matrix4x4.identity;
+
+            if (mesh != null)
+            {
+                GameObject meshObj = new GameObject("[Actor " + (id == -1 ? customName : id) + " Mesh]");
+                meshObj.transform.parent = mainObjectTRS;
+                meshObj.transform.localPosition = Vector3.zero;
+                meshObj.transform.localRotation = Quaternion.identity;
+                meshObj.transform.localScale = Vector3.one;
+
+                var needToMirror = id != 1004;
+
+                smr = meshObj.AddComponent<SkinnedMeshRenderer>();
+                List<Transform> bones = new List<Transform>();
+                List<Matrix4x4> bindPoseMatrixArray = new List<Matrix4x4>();
+                List<Matrix4x4> modelMatrixArray = new List<Matrix4x4>();
+                Dictionary<NodeRenderer, int> nodeToBoneIndexMap = new Dictionary<NodeRenderer, int>();
+                var topBone = new GameObject("TopJoint");
+                topBone.transform.parent = mainObjectTRS;
+                topBone.transform.localScale = new Vector3(1, 1, 1) * (needToMirror ? 0.25f : 0.75f);
+                localToWorldMatrix = topBone.transform.localToWorldMatrix;
+
+                // Bones
+                int i = 0;
+                int rendererIdx = 0;
+                foreach (var renderer in renderers)
+                {
+                    if (rendererIdx == 0)
+                    {
+                        // Only the first NodeRenderer has the bone hierarchy, the rest are duplicates to access bones by index
+                        ParseActorBones(actor, renderer, topBone.transform, ref i, ref bones, ref bindPoseMatrixArray, ref localToWorldMatrix, ref nodeToBoneIndexMap, nodeList.Count, needToMirror, ref modelMatrixArray);
+                    }
+
+                    rendererIdx++;
+                }
+
+                var boneWeights = ParseBoneWeights(renderers, sharedOutput, bones, nodeToBoneIndexMap);
+
+                smr.sharedMesh = mesh;
+                smr.rootBone = topBone.transform;
+                smr.bones = bones.ToArray();
+                mesh.bindposes = bindPoseMatrixArray.ToArray();
+                mesh.boneWeights = boneWeights;
+
+                smr.materials = materials.ToArray();
+            }
+
+            return smr;
+        }
+
 
         public static PKSnap_Actor SpawnActorFromStaticModelRenderer(ModelRenderer data, string customName, Transform parent, long id, SnapRenderer snapRenderer)
         {
@@ -301,7 +495,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             var sharedOutput = data.SharedOutput;
             List<Texture2D> textures = new List<Texture2D>();
             List<Material> materials = new List<Material>();
-            var mesh = BuildMeshFromDrawCallRSPVertices(customName, sharedOutput.Vertices, sharedOutput.Indices, data.Renderers, out materials, out textures);
+            var mesh = BuildMeshFromNodeRendererList(customName, sharedOutput.Vertices, sharedOutput.Indices, data.Renderers, out materials, out textures);
   
             if (mesh != null)
             {
@@ -312,27 +506,28 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             }
 
             var actor = go.AddComponent<PKSnap_Actor>();
-            actor.InitActor(id, textures, visible);
+            actor.InitActor(id, textures, visible, null, data);
             return actor;
         }
 
         public static PKSnap_ZeroOne SpawnZeroOneObject(ZeroOne data, ModelRenderer zeroOneModelRenderer, PKSnap_Level pkLevel, Transform parent)
         {
             GameObject go = new GameObject("Zero One");
+            PKSnap_ZeroOne zeroOne = go.AddComponent<PKSnap_ZeroOne>();
             go.transform.parent = parent;
-            go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
             go.transform.localScale = new Vector3(-1, 1, 1);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localPosition = Vector3.zero;
 
             bool visible = zeroOneModelRenderer.Visible;
 
             var sharedOutput = data.SharedOutput;
             var textures = new List<Texture2D>();
-            BuildMeshAndBonesFromData("ZeroOne", "ZeroOne ", go.transform, sharedOutput, zeroOneModelRenderer.Renderers, out textures);
-
+            var smr = BuildMeshAndBonesFromData(zeroOne, "ZeroOne", -1, go.transform, sharedOutput, zeroOneModelRenderer.Renderers, out textures, data.Nodes, data.Animations);
+            zeroOne.InitActor(-1, textures, visible, smr, zeroOneModelRenderer);
             go.SetActive(visible);
 
-            return go.AddComponent<PKSnap_ZeroOne>();
+            return zeroOne;
         }
 
         public static List<PKSnap_Actor> SpawnActorPerSpawnObject(PKSnap_Actor actor, PKSnap_Level pkLevel)
@@ -353,6 +548,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                         {
                             PKSnap_Actor ac = Instantiate(actor, obj.transform);
                             ac.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                            //ac.transform.SetPositionAndRotation(obj.transform.position, obj.transform.rotation);
                             instActors.Add(ac);
                             room.AddActor(ac);
                             break;
@@ -379,36 +575,59 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             );
         }
 
-        public static int ParseActorBones(NodeRenderer renderer, Transform trs, int count, ref List<Transform> bones, ref List<Matrix4x4> bindPoseMatrixArray)
+        public static void ApplyOpenGLModelMatrixToTransform(Matrix4x4 openGLMatrix, Transform targetTransform)
+        {
+            Matrix4x4 unityMatrix = openGLMatrix.transpose;
+
+            Vector3 position = unityMatrix.GetColumn(3);
+
+            Quaternion rotation = Quaternion.LookRotation(
+                unityMatrix.GetColumn(2), // Forward
+                unityMatrix.GetColumn(1)  // Up
+            );
+   
+            Vector3 scale = new Vector3(
+                unityMatrix.GetColumn(0).magnitude,
+                unityMatrix.GetColumn(1).magnitude,
+                unityMatrix.GetColumn(2).magnitude
+            );
+
+            targetTransform.localPosition = position * .0100f;
+            targetTransform.localRotation = rotation;
+            targetTransform.localScale = scale;
+        }
+
+        public static void ParseActorBones(
+            PKSnap_Actor actor,
+            NodeRenderer renderer, Transform trs, ref int count, 
+            ref List<Transform> bones, ref List<Matrix4x4> bindPoseMatrixArray, 
+            ref Matrix4x4 rootLocalToWorldMatrix, ref Dictionary<NodeRenderer, int> nodeToBoneIndexMap,
+            int nodeListCount,
+            bool needToMirror, ref List<Matrix4x4> modelMatricesArray)
         {
             GameObject currGo = new GameObject(count.ToString());
-            currGo.transform.parent = trs;
+          //  ApplyOpenGLModelMatrixToTransform(renderer.ModelMatrix, currGo.transform);
 
-            currGo.transform.localPosition = renderer.Translation;
-            currGo.transform.localRotation = Quaternion.Euler(renderer.Euler);
-            currGo.transform.localScale = renderer.Scale;
-
-            bones.Add(currGo.transform);
-            bindPoseMatrixArray.Add(renderer.ModelMatrix * renderer.Parent);
-
-            foreach (DrawCallInstance dc in renderer.DrawCalls)
+            var pkBone = currGo.AddComponent<PKSnap_Bone>();
+            if (pkBone.InitBone(actor, renderer, trs, GlobalScale, count, needToMirror))
             {
-                foreach (var te in dc.TextureEntry)
-                {
-                    //Debug.LogWarning("Texture entry: " + te.name);
-                }
+                modelMatricesArray.Add(renderer.ModelMatrix);
+
+                bones.Add(currGo.transform);
+                var offset = new Vector3(0, 1.23f, 0);
+                Matrix4x4 bindPose = Matrix4x4.identity;//renderer.ModelMatrix.transpose.inverse * rootLocalToWorldMatrix;  //Matrix4x4.identity;//currGo.transform.worldToLocalMatrix * rootLocalToWorldMatrix;
+                bindPoseMatrixArray.Add(bindPose);
+                nodeToBoneIndexMap[renderer] = count;   
             }
 
-            if (renderer.Children.Count != 0)
-            {
-                foreach (var r in renderer.Children)
-                {
-                    return ParseActorBones(r, currGo.transform, count+1, ref bones, ref bindPoseMatrixArray);
-                }
-            }
+            count++;
 
-            return count;
+            foreach (var child in renderer.Children)
+            {
+                ParseActorBones(actor, child, currGo.transform, ref count, ref bones, ref bindPoseMatrixArray, ref rootLocalToWorldMatrix, ref nodeToBoneIndexMap, nodeListCount, needToMirror, ref modelMatricesArray);
+            }
         }
+
 
         public static List<Texture2D> BuildTexturesFromTextureCache(RDP.TextureCache textureCache, string customName)
         {
@@ -419,7 +638,6 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
         {
             var list = new List<Texture2D>();
 
-            Debug.Log("Texture Cache Count: " + textures.Count);
             foreach (RDP.Texture rdpTex in textures)
             {
                 if (rdpTex == null || rdpTex.pixels == null || rdpTex.pixels.Length == 0)
@@ -491,9 +709,19 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
             GameObject go = new GameObject(customName);
             go.transform.parent = parent;
-            go.transform.position = room.Node.Translation;
-            go.transform.rotation = Quaternion.Euler(room.Node.Euler);
-            go.transform.localScale = room.Node.Scale;
+
+            Vector3 pos = room.Node.Translation * GlobalScale;
+            Vector3 euler = room.Node.Euler * Mathf.Rad2Deg;
+            Vector3 scale = room.Node.Scale;
+
+            /*
+             * pos.x *= -1;
+            euler.y *= -1;
+            euler.z *= -1;*/
+
+            go.transform.localScale = scale;
+            go.transform.localEulerAngles = euler;
+            go.transform.localPosition = pos;
 
             PKSnap_Room pkRoom = go.AddComponent<PKSnap_Room>();
             var data = id == -1 ? snapRenderer.SkyboxData.ModelRenderers[0] : snapRenderer.RoomData.ModelRenderers[id];
@@ -501,7 +729,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             var sharedOutput = data.SharedOutput;
             List<Texture2D> textures = new List<Texture2D>();
             List<Material> materials = new List<Material>();
-            var mesh = BuildMeshFromDrawCallRSPVertices(customName, sharedOutput.Vertices, sharedOutput.Indices, data.Renderers, out materials, out textures);
+            var mesh = BuildMeshFromNodeRendererList(customName, sharedOutput.Vertices, sharedOutput.Indices, data.Renderers, out materials, out textures);
 
             if (mesh != null)
             {
@@ -521,9 +749,19 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             {
                 GameObject ob = new GameObject("[Room Object: " + o.ID + "]");
                 ob.transform.parent = go.transform;
-                ob.transform.transform.position = o.Position;
-                ob.transform.rotation = Quaternion.Euler(o.Euler);
-                ob.transform.localScale = o.Scale;
+
+                Vector3 posObj = o.Position * GlobalScale;
+                Vector3 eulerObj = o.Euler * Mathf.Rad2Deg;
+                Vector3 scaleObj = o.Scale;
+
+                /*posObj.x *= -1;
+                eulerObj.y *= -1;
+                scaleObj.z *= -1;*/
+
+                ob.transform.localScale = scaleObj;
+                ob.transform.eulerAngles = eulerObj;
+                ob.transform.position = posObj;
+
                 PKSnap_ObjectData odata = ob.AddComponent<PKSnap_ObjectData>();
                 odata.Behaviour = o.Behaviour;
                 odata.ID = o.ID;
@@ -552,7 +790,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             return pkRoom;
         }
 
-        public static Mesh BuildMeshFromDrawCallRSPVertices(string customName, List<RSPVertex> vertices, List<long> indices, List<NodeRenderer> nodeRenderers, out List<Material> materialsOut, out List<Texture2D> textures, Vector2? manualUVs = null, bool debugUVs = false)
+ 
+        public static Mesh BuildMeshFromNodeRendererList(string customName, List<RSPVertex> vertices, List<long> indices, List<NodeRenderer> nodeRenderers, out List<Material> materialsOut, out List<Texture2D> textures, Vector2? manualUVs = null, bool debugUVs = false)
         {
             var finalVertices = new List<Vector3>();
             var finalColors = new List<Color32>();
@@ -601,7 +840,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                         if (!vertexMap.ContainsKey(globalIndex))
                         {
                             var v = vertices[globalIndex];
-                            finalVertices.Add(new Vector3((float)v.x, (float)v.y, (float)v.z));
+                            var vval = new Vector3((float)v.x, (float)v.y, (float)v.z) * GlobalScale;
+                            finalVertices.Add(vval);
                             finalColors.Add(new Color((float)v.c0, (float)v.c1, (float)v.c2, (float)v.a));
 
                             var vtx = v.tx / scaleX;
@@ -749,11 +989,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             var archives = loaded.Levels;
             var pokemonArchives = loaded.Pokemon;
 
-                Debug.Log("PkCount: " + pokemonArchives.Count);
-                Debug.Log("LvCount: " + archives.Count);
-
             var level = archives[0];
-            level.Log();
+            //level.Log();
 
             var dataMap = new CRGDataMap(new List<CRGDataRange>
             {

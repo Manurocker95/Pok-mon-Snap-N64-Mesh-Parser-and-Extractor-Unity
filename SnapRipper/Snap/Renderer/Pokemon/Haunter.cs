@@ -14,7 +14,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
         {
         }
 
-        public override void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, LevelGlobals globals)
+        public override void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, LevelGlobals globals, bool _updateBuffers = false)
         {
             if (!this.Visible)
                 return;
@@ -30,7 +30,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 this.FullModel.Visible = this.Hidden;
             }
 
-            base.PrepareToRender(device, renderInstManager, viewerInput, globals);
+            base.PrepareToRender(device, renderInstManager, viewerInput, globals, _updateBuffers);
 
             if (this.Hidden)
             {

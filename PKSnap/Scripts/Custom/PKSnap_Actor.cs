@@ -5,6 +5,8 @@ using System.IO;
 using UnityEditor;
 #endif
 using UnityEngine;
+using VirtualPhenix.Nintendo64;
+using VirtualPhenix.Nintendo64.PokemonSnap;
 
 namespace VirtualPhenix.PokemonSnap64
 {
@@ -12,16 +14,23 @@ namespace VirtualPhenix.PokemonSnap64
     {
         [SerializeField] private long m_ID;
         [SerializeField] private List<Texture2D> m_textures;
+        [SerializeField] private SkinnedMeshRenderer m_skinnedMeshRenderer;
+        [SerializeField] private ModelRenderer m_modelRenderer;
 
         public long ID { get { return m_ID; } }
         public List<Texture2D> Texturs { get { return m_textures; } }
+        public SkinnedMeshRenderer SkinnedMeshRenderer { get { return m_skinnedMeshRenderer; } }
 
-        public void InitActor(long id, List<Texture2D> textures, bool _visible)
+        public void InitActor(long id, List<Texture2D> textures, bool _visible, SkinnedMeshRenderer _skinnedMeshRenderer = null, ModelRenderer _modelRenderer = null)
         {
             m_ID = id;
             m_textures = new List<Texture2D>(textures);
             gameObject.SetActive(_visible);
+            m_skinnedMeshRenderer = _skinnedMeshRenderer;
+            m_modelRenderer = _modelRenderer;
         }
+    
+
 #if UNITY_EDITOR
         [MenuItem("CONTEXT/PKSnap_Actor/Export Textures")]
         private static void ExportTextures(MenuCommand command)
@@ -61,15 +70,25 @@ namespace VirtualPhenix.PokemonSnap64
         [MenuItem("CONTEXT/PKSnap_Actor/Export Mesh")]
         private static void ExportMesh(MenuCommand command)
         {
+            Mesh m = null;
             PKSnap_Actor actor = (PKSnap_Actor)command.context;
-            MeshFilter meshFilter = actor.GetComponent<MeshFilter>();
-            if (meshFilter == null || meshFilter.sharedMesh == null)
+            if (!actor.SkinnedMeshRenderer)
             {
-                Debug.LogWarning("No MeshFilter or Mesh found to export.");
-                return;
+                MeshFilter meshFilter = actor.GetComponent<MeshFilter>();
+                if (meshFilter == null || meshFilter.sharedMesh == null)
+                {
+                    Debug.LogWarning("No MeshFilter or Mesh found to export.");
+                    return;
+                }
+                m = meshFilter.sharedMesh;
+            }
+            else
+            {
+                m = actor.SkinnedMeshRenderer.sharedMesh;
             }
 
-            string folderPath = EditorUtility.OpenFolderPanel("Select Export Folder", "Assets", "");
+
+                string folderPath = EditorUtility.OpenFolderPanel("Select Export Folder", "Assets", "");
             if (string.IsNullOrEmpty(folderPath) || !folderPath.StartsWith(Application.dataPath))
             {
                 Debug.LogWarning("Export cancelled or folder not inside Assets.");
@@ -82,7 +101,7 @@ namespace VirtualPhenix.PokemonSnap64
             string fullAssetPath = Path.Combine(relativePath, assetName).Replace("\\", "/");
 
             // Duplicate mesh to avoid modifying the original sharedMesh
-            Mesh meshCopy = Object.Instantiate(meshFilter.sharedMesh);
+            Mesh meshCopy = Object.Instantiate(m);
             AssetDatabase.CreateAsset(meshCopy, fullAssetPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();

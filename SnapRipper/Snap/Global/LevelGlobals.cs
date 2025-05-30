@@ -366,9 +366,13 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 			return output.ToArray();
 		}
 
-		public void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput)
+		public void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, bool _flush = false)
 		{
-			renderInstManager.SetCurrentList(RenderInstListMain);
+			if (_flush)
+			{
+				renderInstManager.SetCurrentList(RenderInstListMain);
+			}
+
 			Particles.PrepareToRender(device, renderInstManager, viewerInput);
 
 			ZeroOne.PrepareToRender(device, renderInstManager, viewerInput, this);

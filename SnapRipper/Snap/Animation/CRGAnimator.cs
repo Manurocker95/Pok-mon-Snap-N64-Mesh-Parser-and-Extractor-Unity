@@ -61,7 +61,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
         public bool Update(double time)
         {
-            if (Track == null)
+            if (Track == null || Track.Entries.Count == 0)
                 return false;
 
             var entries = Track.Entries;

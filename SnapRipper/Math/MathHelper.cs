@@ -231,6 +231,40 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             return BitConverter.ToSingle(bytes, 0);
         }
 
+        public static Matrix4x4 MatrixFromSRT(Vector3 scale, Vector3 eulerRadians, Vector3 translation)
+        {
+            double sx = scale.x, sy = scale.y, sz = scale.z;
+            double rx = eulerRadians.x, ry = eulerRadians.y, rz = eulerRadians.z;
+
+            double sinX = Math.Sin(rx), cosX = Math.Cos(rx);
+            double sinY = Math.Sin(ry), cosY = Math.Cos(ry);
+            double sinZ = Math.Sin(rz), cosZ = Math.Cos(rz);
+
+            Matrix4x4 m = new Matrix4x4();
+
+            m.m00 = (float)(sx * (cosY * cosZ));
+            m.m01 = (float)(sx * (sinZ * cosY));
+            m.m02 = (float)(sx * (-sinY));
+            m.m03 = 0.0f;
+
+            m.m10 = (float)(sy * (sinX * cosZ * sinY - cosX * sinZ));
+            m.m11 = (float)(sy * (sinX * sinZ * sinY + cosX * cosZ));
+            m.m12 = (float)(sy * (sinX * cosY));
+            m.m13 = 0.0f;
+
+            m.m20 = (float)(sz * (cosX * cosZ * sinY + sinX * sinZ));
+            m.m21 = (float)(sz * (cosX * sinZ * sinY - sinX * cosZ));
+            m.m22 = (float)(sz * (cosY * cosX));
+            m.m23 = 0.0f;
+
+            m.m30 = translation.x;
+            m.m31 = translation.y;
+            m.m32 = translation.z;
+            m.m33 = 1.0f;
+
+            return m;
+        }
+
         public static void ComputeModelMatrixSRT(ref Matrix4x4 dst, double scaleX, double scaleY, double scaleZ, double rotationX, double rotationY, double rotationZ, double translationX, double translationY, double translationZ)
         {
             double sinX = Math.Sin(rotationX), cosX = Math.Cos(rotationX);

@@ -17,7 +17,7 @@ namespace VirtualPhenix.Nintendo64.BanjoKazooie
         }
         public void SetTimeFromViewerInput(ViewerRenderInput viewerInput)
         {
-            time = viewerInput.Time / 1000f;
+            time = viewerInput != null ? viewerInput.Time / 1000f : Time.time;
             if (!initialized)
             {
                 initialized = true;

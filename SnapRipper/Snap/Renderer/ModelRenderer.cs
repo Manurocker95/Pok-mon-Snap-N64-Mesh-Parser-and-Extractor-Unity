@@ -5,6 +5,7 @@ using VirtualPhenix.Nintendo64.BanjoKazooie;
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap
 {
+    [System.Serializable]
     public class ModelRenderer : Target
     {
         public bool Visible = true;
@@ -50,6 +51,33 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 }
             }
         }
+
+        public void DecomposeModelMatrix(out Vector3 pos, out Quaternion rot, out Vector3 scale)
+        {
+            DecomposeMatrix(ModelMatrix, out pos, out rot, out scale);
+        }
+
+        public void DecomposeMatrix(Matrix4x4 m, out Vector3 pos, out Quaternion rot, out Vector3 scale)
+        {
+            pos = m.GetColumn(3);
+
+            scale = new Vector3(
+                m.GetColumn(0).magnitude,
+                m.GetColumn(1).magnitude,
+                m.GetColumn(2).magnitude
+            );
+
+            Matrix4x4 rotMatrix = m;
+            rotMatrix.SetColumn(0, m.GetColumn(0).normalized);
+            rotMatrix.SetColumn(1, m.GetColumn(1).normalized);
+            rotMatrix.SetColumn(2, m.GetColumn(2).normalized);
+
+            rot = Quaternion.LookRotation(
+                rotMatrix.GetColumn(2),
+                rotMatrix.GetColumn(1)
+            );
+        }
+
         public virtual List<GfxBindingLayoutDescriptor> BindingLayouts()
         {
             return new List<GfxBindingLayoutDescriptor>() { new GfxBindingLayoutDescriptor() { NumUniformBuffers = 2, NumSamplers = 1 } };
@@ -124,6 +152,9 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
         public virtual void SetAnimation(int index)
         {
+            if (Animations.Count <= index)
+                return;
+
             CurrAnimation = index;
             AnimationController.Init(Animations[index].FPS);
             var newAnim = Animations[index];
@@ -133,7 +164,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             {
                 if (newAnim.Tracks.Count <= i)
                 {
-                    Debug.LogError("Model Renderer has no tracks");
+                    Debug.LogError("Model Renderer: "+this.ID + " has no tracks");
                     Debug.LogError(newAnim.Tracks.Count);
                     continue;
                 }
@@ -186,7 +217,17 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
         protected virtual void Motion(ViewerRenderInput viewerInput, LevelGlobals globals) { }
 
-        public virtual void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, LevelGlobals globals)
+        public virtual void PreviewPrepareToRender( LevelGlobals globals, ViewerRenderInput viewerInput = null)
+        {
+            AnimationController.SetTimeFromViewerInput(viewerInput);
+            if (MaterialController != null)
+                MaterialController.SetTimeFromViewerInput(viewerInput);
+
+            Motion(viewerInput, globals);
+            Animate(globals);
+        }
+
+        public virtual void PrepareToRender(GfxDevice device, GfxRenderInstManager renderInstManager, ViewerRenderInput viewerInput, LevelGlobals globals, bool _updateBuffers = false)
         {
             if (!Visible)
                 return;
@@ -198,7 +239,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             Motion(viewerInput, globals);
             Animate(globals);
 
-            if (Hidden)
+            if (Hidden || !_updateBuffers)
                 return;
 
             var template = renderInstManager.PushTemplate();

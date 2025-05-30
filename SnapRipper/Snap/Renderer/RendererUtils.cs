@@ -6,7 +6,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 {
     public static class RendererUtils
     {
-        public static void BuildTransform(ref Matrix4x4 dst, Vector3 pos, Vector3 euler, Vector3 scale, bool _useModelMatrixSRT = false)
+        public static void BuildTransform(ref Matrix4x4 dst, Vector3 pos, Vector3 euler, Vector3 scale, bool _useModelMatrixSRT = true)
         {
             if (_useModelMatrixSRT)
             {

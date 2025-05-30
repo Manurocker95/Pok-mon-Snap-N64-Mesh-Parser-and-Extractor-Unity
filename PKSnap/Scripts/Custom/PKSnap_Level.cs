@@ -11,7 +11,7 @@ namespace VirtualPhenix.PokemonSnap64
     {
         [SerializeField] private PKSnap_Skybox m_skybox;
         [SerializeField] private List<PKSnap_Room> m_rooms;
-        [NonSerialized] private SnapRenderer m_snapRenderer;
+        [SerializeField] private SnapRenderer m_snapRenderer;
         [SerializeField] private ViewerRenderInput m_viewerInput;
         [SerializeField] private bool m_updateLevel = false;
         [SerializeField] private List<PKSnap_Actor> m_staticActors;
@@ -69,24 +69,27 @@ namespace VirtualPhenix.PokemonSnap64
             m_viewerInput.Time = Time.time;
         }
 
-        private void Update()
+        public void ForceUpdate()
         {
-            m_viewerInput.DeltaTime = Time.deltaTime;
-
-            if (!m_updateLevel || m_snapRenderer == null || m_snapRenderer.ModelRenderers == null)
+            if (m_viewerInput == null)
+            {
+                m_viewerInput = new ViewerRenderInput();
+                m_viewerInput.Camera = Camera.main;
+                m_viewerInput.Time = Time.time;
+                m_viewerInput.DeltaTime = Time.deltaTime;
+            }
+            if (m_snapRenderer == null)
+            {
                 return;
-
-            var device = m_snapRenderer.LevelGlobals.Context.GFXDevice;
-            
+            }
             for (var i = 0; i < m_snapRenderer.ModelRenderers.Count; i++)
             {
-                Debug.Log("H");
-                m_snapRenderer.ModelRenderers[i].PrepareToRender(device, m_snapRenderer.RenderHelper.RenderInstManager, m_viewerInput, m_snapRenderer.LevelGlobals);
+                m_snapRenderer.ModelRenderers[i].PrepareToRender(null, m_snapRenderer.RenderHelper.RenderInstManager, m_viewerInput, m_snapRenderer.LevelGlobals);
             }
 
-            m_snapRenderer.LevelGlobals.PrepareToRender(device, m_snapRenderer.RenderHelper.RenderInstManager, m_viewerInput);
-
-           
+            m_snapRenderer.LevelGlobals.PrepareToRender(null, m_snapRenderer.RenderHelper.RenderInstManager, m_viewerInput);
         }
+
+        
     }
 }

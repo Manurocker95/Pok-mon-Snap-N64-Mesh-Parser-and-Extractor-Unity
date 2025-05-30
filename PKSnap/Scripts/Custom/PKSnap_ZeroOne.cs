@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace VirtualPhenix.PokemonSnap64
 {
-    public class PKSnap_ZeroOne : MonoBehaviour
+    public class PKSnap_ZeroOne : PKSnap_Actor
     {
         // Start is called before the first frame update
         void Start()
