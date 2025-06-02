@@ -275,6 +275,12 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 			FishTable = level.FishTable;
 			for (int i = 0; i < level.FishTable.Count; i++)
 			{
+				if (defs.Count == 0)
+				{
+					Debug.LogError("Check Build temp object def list!");
+                    break;
+                }
+
 				if (level.FishTable[i].ID == 0)
 					continue;
 
@@ -341,7 +347,10 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 				}
 
 				int tempIndex = defs.FindIndex(d => d.ID == id);
-                Debug.Assert(tempIndex >= 0);
+                if (tempIndex < 0)
+				{
+					continue;
+				}
 
 				for (int i = 0; i < count; i++)
 				{

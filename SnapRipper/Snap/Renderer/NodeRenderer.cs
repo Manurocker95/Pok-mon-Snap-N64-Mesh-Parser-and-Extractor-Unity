@@ -29,6 +29,9 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             this.node = node;
             this.Parent = parent;
             this.IsSkybox = isSkybox;
+            
+            this.SetTransfromFromNode();
+            Multiply(ref this.ModelMatrix, this.Parent, this.Transform);
 
             var drawMatrices = new List<Matrix4x4> { this.ModelMatrix, parent };
 
@@ -47,8 +50,6 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                     this.DrawCalls.Add(dc);
                 }
             }
-
-            this.SetTransfromFromNode();
         }
 
         public void SetTransfromFromNode()

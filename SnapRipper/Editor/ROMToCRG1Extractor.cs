@@ -4,6 +4,8 @@ using System.IO;
 using System.Collections.Generic;
 using VirtualPhenix.Nintendo64;
 using System;
+using System.Runtime.Remoting.Messaging;
+
 
 namespace VirtualPhenix.PokemonSnapRipper
 {

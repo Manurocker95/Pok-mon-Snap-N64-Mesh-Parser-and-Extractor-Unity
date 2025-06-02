@@ -12,8 +12,17 @@ using VirtualPhenix.PokemonSnap64;
 
 namespace VirtualPhenix.Nintendo64.PokemonSnap 
 { 
-    public class SceneCreator : EditorWindow
+    public class SceneCreator : MonoBehaviour
     {
+        public enum SpawnLevelList
+        {
+            Skybox,
+            Stage,
+            StaticActors,
+            DynamicActor,
+            ZeroOne
+        }
+
         public static float GlobalScale = .01f;
 
         public class LoadedLevelArchives
@@ -28,20 +37,87 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             }
         }
 
-        [MenuItem("Pokemon Snap/Parse Scene Models")]
-        static void ParseSceneModels()
+        static void ParseModelData(out SnapRenderer snapRenderer, out Level parsedLevel)
         {
-
-            string defaultID = "10"; 
+            var snapExtractor = FindObjectOfType<SnapExtractor>();
+            string defaultID = snapExtractor != null && !string.IsNullOrEmpty(snapExtractor.CRGFile) ? snapExtractor.CRGFile : "10";
             var list = GetArcFileListById(defaultID);
             var archives = LoadLevelArchives(list);
-            var parsedLevel = ParseLevel(archives);
+            parsedLevel = ParseLevel(archives);
 
             // Animation data is based on model renderer instead of used in direct model graph, so lets check this ;)
-            var sceneRenderer = InitSnapRenderer(parsedLevel, defaultID); 
+            snapRenderer = InitSnapRenderer(parsedLevel, defaultID);
+        }
 
+        [MenuItem("Pokemon Snap/Parse All Scene Models")]
+        static void ParseAllSceneModels()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
             // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
-            SpawnObjectsFromParsedLevelRooms(parsedLevel, sceneRenderer);
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { true, true, true, true, true });
+        }
+
+        [MenuItem("Pokemon Snap/Parse Skybox Model")]
+        static void ParseSkyboxModel()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { true, false, false, false, false });
+        }
+
+        [MenuItem("Pokemon Snap/Parse Stage Models")]
+        static void ParseStageModels()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { false, true, false, false, false });
+        }
+
+
+        [MenuItem("Pokemon Snap/Parse Static Actors Models")]
+        static void ParseStaticActorModels()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { false, false, true, false, false });
+        }
+
+        [MenuItem("Pokemon Snap/Parse Dynamic Actors Models")]
+        static void ParseDynamicActorModels()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { false, false, false, true, false });
+        }
+        
+        [MenuItem("Pokemon Snap/Parse Zero One Model")]
+        static void ParseZeroOneModel()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { false, false, false, false, true });
+        }
+
+        [MenuItem("Pokemon Snap/Parse Stage and Static Models")]
+        static void ParseStageAndStaticModels()
+        {
+            SnapRenderer snapRenderer;
+            Level parsedLevel;
+            ParseModelData(out snapRenderer, out parsedLevel);
+            // Instantiate UnityEngine Objects from ParsedLevel and Snap Renderer
+            SpawnObjectsFromParsedLevelRooms(parsedLevel, snapRenderer, new List<bool> { false, true, true, false, false });
         }
 
         public static SnapRenderer InitSnapRenderer(Level parsedLevel, string id)
@@ -191,58 +267,76 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             return sceneRenderer;
         }
 
-        public static void SpawnObjectsFromParsedLevelRooms(Level level, SnapRenderer snapRenderer)
+        public static void SpawnObjectsFromParsedLevelRooms(Level level, SnapRenderer snapRenderer, List<bool> _spawnList)
         {
             GameObject go = new GameObject("[Level "+ level.Name+"]");
             var pkLevel = go.AddComponent<PKSnap_Level>();
             pkLevel.SetSnapRenderer(snapRenderer);
             //go.transform.localScale = new Vector3(-1f, 1f, 1f);
 
-            var skyboxRoom = SpawnFromRoomData(level.Skybox, "Skybox", go.transform, -1, snapRenderer);
-            PKSnap_Skybox skybox = skyboxRoom.gameObject.AddComponent<PKSnap_Skybox>();
-            skybox.InitSkybox(skyboxRoom.Texturs);
-            pkLevel.SetSkybox(skybox);
-
-            int idx = 0;
-            foreach (var rooms in level.Rooms)
+            if (_spawnList[(int)SpawnLevelList.Skybox])
             {
-                PKSnap_Room room = SpawnFromRoomData(rooms, "[Room "+ idx + "]", go.transform, idx, snapRenderer);
-                pkLevel.AddRoom(room);
-                idx++;
-            }
-
-            var staticActors = snapRenderer.StaticActorData;
-            foreach (var mdls in staticActors.ModelRenderers)
-            {
-                mdls.SetAnimation(0);
-
-                PKSnap_Actor spawnedActor = SpawnActorFromStaticModelRenderer(mdls, "[Static Actor " + mdls.ID + "]", go.transform, mdls.ID, snapRenderer);
-                var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
-                pkLevel.AddStaticActors(instActors);
-            }
-
-            var dynamicActors = snapRenderer.ActorData;
-            foreach (var mdls in dynamicActors.ModelRenderers)
-            {
-                PKSnap_Actor spawnedActor = SpawnActorFromDynamicModelRenderer(mdls, "[Dynamic Actor " + mdls.ID + "]", go.transform, mdls.ID, snapRenderer);
-                var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
-                foreach (var act in instActors)
+                var skyboxRoom = SpawnFromRoomData(level.Skybox, "Skybox", go.transform, -1, snapRenderer);
+                if (skyboxRoom != null)
                 {
-                    // TODO
-                    //act.transform.localScale *= 0.5f;
-                    //act.transform.localPosition = Vector3.zero;
+                    PKSnap_Skybox skybox = skyboxRoom.gameObject.AddComponent<PKSnap_Skybox>();
+                    skybox.InitSkybox(skyboxRoom.Texturs);
+                    pkLevel.SetSkybox(skybox);
                 }
-
-                pkLevel.AddDynamicActors(instActors);
             }
 
-            ZeroOne zeroOne = snapRenderer.LevelGlobals.Level.ZeroOne;
-            PKSnap_ZeroOne pkZero = SpawnZeroOneObject(zeroOne, snapRenderer.LevelGlobals.ZeroOne, pkLevel, go.transform);
-            pkLevel.SetZeroOne(pkZero);
-            pkLevel.ForceUpdate();
+            if (_spawnList[(int)SpawnLevelList.Stage])
+            {
+                int idx = 0;
+                foreach (var rooms in level.Rooms)
+                {
+                    PKSnap_Room room = SpawnFromRoomData(rooms, "[Room " + idx + "]", go.transform, idx, snapRenderer);
+                    pkLevel.AddRoom(room);
+                    idx++;
+                }
+            }
+
+            if (_spawnList[(int)SpawnLevelList.StaticActors])
+            {
+                var staticActors = snapRenderer.StaticActorData;
+                foreach (var mdls in staticActors.ModelRenderers)
+                {
+                    mdls.SetAnimation(0);
+
+                    PKSnap_Actor spawnedActor = SpawnActorFromStaticModelRenderer(mdls, "[Static Actor " + mdls.ID + "]", go.transform, mdls.ID, snapRenderer);
+                    var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
+                    pkLevel.AddStaticActors(instActors);
+                }
+            }
+
+            if (_spawnList[(int)SpawnLevelList.DynamicActor])
+            {
+                var dynamicActors = snapRenderer.ActorData;
+                foreach (var mdls in dynamicActors.ModelRenderers)
+                {
+                    PKSnap_Actor spawnedActor = SpawnActorFromDynamicModelRenderer(mdls, "[Dynamic Actor " + mdls.ID + "]", go.transform, mdls.ID, snapRenderer);
+                    var instActors = SpawnActorPerSpawnObject(spawnedActor, pkLevel);
+                    foreach (var act in instActors)
+                    {
+                        // TODO
+                        //act.transform.localScale *= 0.5f;
+                        //act.transform.localPosition = Vector3.zero;
+                    }
+
+                    pkLevel.AddDynamicActors(instActors);
+                }
+            }
+
+            if (_spawnList[(int)SpawnLevelList.ZeroOne])
+            {
+                ZeroOne zeroOne = snapRenderer.LevelGlobals.Level.ZeroOne;
+                PKSnap_ZeroOne pkZero = SpawnZeroOneObject(zeroOne, snapRenderer.LevelGlobals.ZeroOne, pkLevel, go.transform);
+                pkLevel.SetZeroOne(pkZero);
+                pkLevel.ForceUpdate();
+            }
 
             // TODO
-            go.transform.localScale = new Vector3(-1f, 1f, 1f);
+            //go.transform.localScale = new Vector3(-1f, 1f, 1f);
         }
 
         public static PKSnap_Actor SpawnActorFromDynamicModelRenderer(ModelRenderer data, string customName, Transform parent, long id, SnapRenderer snapRenderer)
@@ -364,9 +458,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 var topBone = new GameObject("TopJoint");
                 topBone.transform.parent = mainObjectTRS;
                 topBone.transform.localScale = Vector3.one;
-                //localToWorldMatrix = topBone.transform.localToWorldMatrix;
-
-
+                localToWorldMatrix = smr.transform.localToWorldMatrix;// topBone.transform.localToWorldMatrix;
 
                 // Bones
                 int i = 0;
@@ -615,7 +707,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
                 bones.Add(currGo.transform);
                 var offset = new Vector3(0, 1.23f, 0);
-                Matrix4x4 bindPose = Matrix4x4.identity;//renderer.ModelMatrix.transpose.inverse * rootLocalToWorldMatrix;  //Matrix4x4.identity;//currGo.transform.worldToLocalMatrix * rootLocalToWorldMatrix;
+                Matrix4x4 bindPose =  Matrix4x4.identity;//renderer.ModelMatrix.transpose.inverse * rootLocalToWorldMatrix;  //Matrix4x4.identity;//currGo.transform.worldToLocalMatrix * rootLocalToWorldMatrix;
                 bindPoseMatrixArray.Add(bindPose);
                 nodeToBoneIndexMap[renderer] = count;   
             }
@@ -704,6 +796,9 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
         
         public static PKSnap_Room SpawnFromRoomData(Room room, string customName, Transform parent, int id, SnapRenderer snapRenderer)
         {
+            if (room == null)
+                return null;
+
             Debug.Log("Parsing Room: " + customName);
             Dictionary<long, List<PKSnap_ObjectData>> roomObjectDict = new Dictionary<long, List<PKSnap_ObjectData>>();
 
@@ -840,7 +935,8 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                         if (!vertexMap.ContainsKey(globalIndex))
                         {
                             var v = vertices[globalIndex];
-                            var vval = new Vector3((float)v.x, (float)v.y, (float)v.z) * GlobalScale;
+                            var vval = new Vector3((float)v.x, (float)v.y, (float)v.z)*GlobalScale;
+                           
                             finalVertices.Add(vval);
                             finalColors.Add(new Color((float)v.c0, (float)v.c1, (float)v.c2, (float)v.a));
 
@@ -1165,14 +1261,22 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                     var initFunc = objFunctionView.GetUint32(offs2 + 0x04, false);
                     offs2 += 0x10;
 
-                    var o = ParseObject(dataMap, id, initFunc);
-                    if (o != null)
+                    try
                     {
-                        objectInfo.Add(o);
+                        var o = ParseObject(dataMap, id, initFunc);
+                        if (o != null)
+                        {
+                            objectInfo.Add(o);
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
-                    else
+                    catch (System.Exception e)
                     {
-                        break;
+                        Debug.LogError(e);
+                        continue;
                     }
                 }
             }
@@ -1515,7 +1619,13 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
                 Vector3 euler = GetVec3(view, offs + 0x14);
                 Vector3 scale = GetVec3(view, offs + 0x20);
 
-                var parent = depth == 0 ? -1 : parentIndices[depth - 1];
+                if (depth > parentIndices.Count)
+                {
+                    Debug.LogError("Something weird happened with depth in parenting parse, check this!");
+                    depth = parentIndices.Count;
+                }
+
+                var parent = depth <= 0 ? -1 : parentIndices[depth - 1];
                 if (parentIndices.Count <= depth)
                     parentIndices.Add(currIndex);
                 else
@@ -1533,7 +1643,23 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
                 if (dl > 0)
                 {
-                    node.Materials = materialList == 0 ? new List<MaterialData>() : ParseMaterialData(dataMap, dataMap.Deref(materialList + currIndex * 4));
+                    if (materialList == 0)
+                    {
+                        node.Materials = new List<MaterialData>();
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var materials = ParseMaterialData(dataMap, dataMap.Deref(materialList + currIndex * 4));
+                            node.Materials = new List<MaterialData>(materials);
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Debug.LogError(ex);
+                            node.Materials = new List<MaterialData>();
+                        }
+                    }
                     node.Model = renderer(dataMap, dl, states, node.Materials);
                     states[0].Clear();
                     states[1].Clear();
@@ -1630,7 +1756,7 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             while (true)
             {
                 long Index = view.GetUint32(offs, false);
-                if (Index == 4) break;
+                if (Index == 4 || states.Length <= Index) break;
                 runSplitDL(dataMap, dlList + (offs + 4), new RSPState[] { states[Index] }, materials);
                 offs += 0xC;
             }
@@ -1698,40 +1824,32 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
 
             var sharedOutput = new RSPSharedOutput();
 
-            try
+            if (usePhoto && id != 1003)
+                dataMap.overlay = 2;
+
+            if (id == 1007)
             {
-                if (usePhoto && id != 1003)
-                    dataMap.overlay = 2;
-
-                if (id == 1007)
-                {
-                    Debug.Log("Parsing palm tree!");
-                }
-
-                var nodes = ParseGraph(dataMap, graphStart, materials, renderer, sharedOutput);
-                var stateGraph = ParseStateGraph(dataMap, animationStart, nodes);
-
-                dataMap.overlay = 0;
-
-                return new ActorDef
-                {
-                    ID = id,
-                    Flags = flags,
-                    Nodes = nodes,
-                    Scale = scale,
-                    Center = center,
-                    Radius = radius,
-                    SharedOutput = sharedOutput,
-                    Spawn = GetSpawnType(dataFinder.SpawnFunc),
-                    StateGraph = stateGraph,
-                    GlobalPointer = dataFinder.GlobalRef
-                };
+                Debug.Log("Parsing palm tree!");
             }
-            catch (System.Exception ex)
+
+            var nodes = ParseGraph(dataMap, graphStart, materials, renderer, sharedOutput);
+            var stateGraph = ParseStateGraph(dataMap, animationStart, nodes);
+
+            dataMap.overlay = 0;
+
+            return new ActorDef
             {
-                Debug.LogError(ex);
-                return null;
-            }
+                ID = id,
+                Flags = flags,
+                Nodes = nodes,
+                Scale = scale,
+                Center = center,
+                Radius = radius,
+                SharedOutput = sharedOutput,
+                Spawn = GetSpawnType(dataFinder.SpawnFunc),
+                StateGraph = stateGraph,
+                GlobalPointer = dataFinder.GlobalRef
+            };
         }
 
         public static SpawnType GetSpawnType(long addr)

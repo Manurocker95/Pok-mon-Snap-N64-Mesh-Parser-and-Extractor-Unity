@@ -90,6 +90,12 @@ namespace VirtualPhenix.Nintendo64.PokemonSnap
             if (!FoundSpawn)
                 return;
 
+            if (DataMap == null)
+            {
+                Debug.LogError("CHECK SPAWN PARSER WITH DATAMAP = NULL");
+                return;
+            }
+
             if (Data.ID > 0x80000000)
                 Data.ID = DataMap.Deref(Data.ID);
 

@@ -9,7 +9,14 @@ namespace VirtualPhenix.PokemonSnap64
     {
         public List<PKBoneData> BoneData = new List<PKBoneData>();
 
-
+        public static Quaternion N64EulerToUnityQuaternion(Vector3 eulerDeg)
+        {
+            // N64 orden Z -> Y -> X
+            Quaternion rz = Quaternion.AngleAxis(eulerDeg.z, Vector3.forward);
+            Quaternion ry = Quaternion.AngleAxis(eulerDeg.y, Vector3.up);
+            Quaternion rx = Quaternion.AngleAxis(eulerDeg.x, Vector3.right);
+            return rz * ry * rx;
+        }
 
         public bool InitBone(PKSnap_Actor actor, NodeRenderer renderer, Transform trs, float _globalScale, int currentCount, bool _needToMirror, bool _debug = true)
         {
@@ -23,17 +30,15 @@ namespace VirtualPhenix.PokemonSnap64
             Vector3 pos = renderer.Translation * _globalScale;
             Vector3 euler = renderer.Euler * Mathf.Rad2Deg;
             Vector3 scale = renderer.Scale;
-
+            Quaternion rot = N64EulerToUnityQuaternion(euler);
             if (!_needToMirror)
             {
                 pos.x *= -1;
-                euler.y *= -1;
-                euler.z *= -1;
                // scale = new Vector3(-1, 1, 1);
             }
        
             transform.localPosition = pos;
-            transform.localEulerAngles = euler;
+            transform.localRotation = rot;
             transform.localScale = scale;
 
             if (_debug)
